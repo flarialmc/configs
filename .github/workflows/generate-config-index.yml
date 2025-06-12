@@ -1,0 +1,118 @@
+name: Generate Config Index
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '*/main.json'
+      - '*/icon.png'
+      - '*.zip'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  generate-index:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      - name: Generate config index
+        run: |
+          python3 << 'EOF'
+          import os
+          import json
+          import re
+          from pathlib import Path
+          
+          def extract_config_metadata(config_dir):
+              """Extract metadata from a config directory."""
+              metadata = {
+                  'name': config_dir.name,
+                  'description': '',
+                  'author': '',
+                  'version': '1.0.0'
+              }
+              
+              main_json_path = config_dir / 'main.json'
+              if main_json_path.exists():
+                  try:
+                      with open(main_json_path, 'r', encoding='utf-8') as f:
+                          data = json.load(f)
+                      
+                      if 'name' in data:
+                          metadata['name'] = data['name']
+                      if 'description' in data:
+                          metadata['description'] = data['description']
+                      if 'author' in data:
+                          metadata['author'] = data['author']
+                      if 'version' in data:
+                          metadata['version'] = data['version']
+                  
+                  except Exception as e:
+                      print(f"Error reading main.json for {config_dir.name}: {e}")
+              
+              return metadata
+          
+          def generate_config_index():
+              """Generate index for config directories."""
+              root_path = Path('.')
+              configs = []
+              
+              for item in root_path.iterdir():
+                  if item.is_dir() and not item.name.startswith('.'):
+                      # Check if it's a config directory (contains config files)
+                      has_icon = (item / 'icon.png').exists()
+                      has_zip = any(item.glob('*.zip'))
+                      has_main_json = (item / 'main.json').exists()
+                      
+                      if has_icon or has_zip or has_main_json:
+                          metadata = extract_config_metadata(item)
+                          
+                          config_entry = {
+                              'id': item.name,
+                              'name': metadata['name'],
+                              'description': metadata['description'],
+                              'author': metadata['author'],
+                              'version': metadata['version'],
+                              'downloadUrl': f"https://cdn.statically.io/gh/flarialmc/configs/main/{item.name}/{item.name}.zip",
+                              'iconUrl': f"https://cdn.statically.io/gh/flarialmc/configs/main/{item.name}/icon.png",
+                              'filename': item.name,
+                              'directory': item.name
+                          }
+                          configs.append(config_entry)
+              
+              # Sort by name
+              configs.sort(key=lambda x: x['name'])
+              return configs
+          
+          # Generate config index
+          print("Generating config index...")
+          configs = generate_config_index()
+          with open('config-index.json', 'w', encoding='utf-8') as f:
+              json.dump(configs, f, indent=2, ensure_ascii=False)
+          
+          print(f"Generated config index with {len(configs)} configs")
+          for config in configs:
+              print(f"  - {config['name']} by {config['author']}")
+          EOF
+      
+      - name: Commit and push index file
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add config-index.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update config index [skip ci]"
+            git push
+          fi
