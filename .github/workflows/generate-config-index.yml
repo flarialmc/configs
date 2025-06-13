@@ -25,6 +25,18 @@ jobs:
         with:
           python-version: '3.x'
       
+      - name: Create zip files for configs
+        run: |
+          for dir in */; do
+            if [ -d "$dir" ] && [ ! "$dir" = ".github/" ]; then
+              config_name=$(basename "$dir")
+              echo "Creating zip for $config_name"
+              cd "$dir"
+              zip -r "../${config_name}.zip" . -x "*.zip"
+              cd ..
+            fi
+          done
+      
       - name: Generate config index
         run: |
           python3 << 'EOF'
@@ -105,14 +117,14 @@ jobs:
               print(f"  - {config['name']} by {config['author']}")
           EOF
       
-      - name: Commit and push index file
+      - name: Commit and push index file and zip files
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add config-index.json
+          git add config-index.json *.zip
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update config index [skip ci]"
+            git commit -m "Update config index and zip files [skip ci]"
             git push
           fi
