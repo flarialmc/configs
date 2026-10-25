@@ -8,8 +8,7 @@ on:
 
 jobs:
   generate-index:
-    runs-on: ubuntu-latest
-    
+    runs-on: [self-hosted, Linux, X64, flarial-ci, rajesh-gb-1]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
